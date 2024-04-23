@@ -22,6 +22,7 @@ async function run() {
   const remote: string = core.getInput('remote');
   const rmRemote: boolean = !!core.getInput('rmRemote') || false;
   const atomicPut: string = core.getInput('atomicPut');
+  const reverse: boolean = !!core.getInput('reverse') || false;
 
   if (atomicPut) {
     // patch SFTPStream to atomically rename files
@@ -65,7 +66,8 @@ async function run() {
       concurrency,
       verbose,
       recursive,
-      rmRemote
+      rmRemote,
+      reverse
     );
 
     ssh.dispose();
@@ -118,7 +120,8 @@ async function scp(
   concurrency: number,
   verbose = true,
   recursive = true,
-  rmRemote = false
+  rmRemote = false,
+  reverse = false
 ) {
   console.log(`Starting scp Action: ${local} to ${remote}`);
 
@@ -134,10 +137,11 @@ async function scp(
         dotfiles,
         concurrency,
         verbose,
-        recursive
+        recursive,
+        reverse
       );
     } else {
-      await putFile(ssh, local, remote, verbose);
+      await putFile(ssh, local, remote, verbose, reverse);
     }
     ssh.dispose();
     console.log('✅ scp Action finished.');
@@ -155,11 +159,13 @@ async function putDirectory(
   dotfiles = false,
   concurrency = 3,
   verbose = false,
-  recursive = true
+  recursive = true,
+  reverse = false
 ) {
   const failed: {local: string; remote: string}[] = [];
   const successful = [];
-  const status = await ssh.putDirectory(local, remote, {
+  const toCall = reverse ? ssh.getDirectory : ssh.putDirectory;
+  const status = await toCall(local, remote, {
     recursive: recursive,
     concurrency: concurrency,
     validate: (path: string) =>
@@ -204,7 +210,6 @@ async function cleanDirectory(ssh: NodeSSH, remote: string, verbose = true) {
     console.error(`⚠️ An error happened:(.`, error.message, error.stack);
     ssh.dispose();
     core.setFailed(error.message);
-
   }
 }
 
@@ -212,12 +217,21 @@ async function putFile(
   ssh: NodeSSH,
   local: string,
   remote: string,
-  verbose = true
+  verbose = true,
+  reverse = false
 ) {
   try {
-    await ssh.putFile(local, remote);
-    if (verbose) {
-      console.log(`✔ Successfully copied file ${local} to remote ${remote}.`);
+    if (reverse) {
+      await ssh.getFile(local, remote);
+    } else {
+      await ssh.putFile(local, remote);
+    }
+    if (verbose && !reverse) {
+      console.log(
+        `✔ Successfully copied file ${local} ${
+          reverse ? 'from' : 'to'
+        } remote ${remote}.`
+      );
     }
   } catch (error) {
     console.error(`⚠️ An error happened:(.`, error.message, error.stack);
@@ -239,9 +253,8 @@ async function putMany<T>(
   }
 }
 
-process.on('uncaughtException', (err) => {
-  if (err['code'] !== 'ECONNRESET')
-    throw err
-})
+process.on('uncaughtException', err => {
+  if (err['code'] !== 'ECONNRESET') throw err;
+});
 
 run();

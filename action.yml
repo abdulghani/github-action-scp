@@ -54,6 +54,10 @@ inputs:
     description: "Upload files to temporary file first, then rename once upload completed"
     required: false
     default: false
+  reverse:
+    description: "Download files from remote to local"
+    required: false
+    default: false    
 runs:
   using: "node16"
   main: "dist/index.js"

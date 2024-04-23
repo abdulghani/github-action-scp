@@ -11310,6 +11310,7 @@ function run() {
         const remote = core.getInput('remote');
         const rmRemote = !!core.getInput('rmRemote') || false;
         const atomicPut = core.getInput('atomicPut');
+        const reverse = !!core.getInput('reverse') || false;
         if (atomicPut) {
             // patch SFTPStream to atomically rename files
             const originalFastPut = ssh2_streams_1.SFTPStream.prototype.fastPut;
@@ -11335,7 +11336,7 @@ function run() {
         }
         try {
             const ssh = yield connect(host, username, port, privateKey, password, passphrase, tryKeyboard);
-            yield scp(ssh, local, remote, dotfiles, concurrency, verbose, recursive, rmRemote);
+            yield scp(ssh, local, remote, dotfiles, concurrency, verbose, recursive, rmRemote, reverse);
             ssh.dispose();
         }
         catch (err) {
@@ -11371,7 +11372,7 @@ function connect(host = 'localhost', username, port = 22, privateKey, password, 
         return ssh;
     });
 }
-function scp(ssh, local, remote, dotfiles = false, concurrency, verbose = true, recursive = true, rmRemote = false) {
+function scp(ssh, local, remote, dotfiles = false, concurrency, verbose = true, recursive = true, rmRemote = false, reverse = false) {
     return __awaiter(this, void 0, void 0, function* () {
         console.log(`Starting scp Action: ${local} to ${remote}`);
         try {
@@ -11379,10 +11380,10 @@ function scp(ssh, local, remote, dotfiles = false, concurrency, verbose = true, 
                 if (rmRemote) {
                     yield cleanDirectory(ssh, remote);
                 }
-                yield putDirectory(ssh, local, remote, dotfiles, concurrency, verbose, recursive);
+                yield putDirectory(ssh, local, remote, dotfiles, concurrency, verbose, recursive, reverse);
             }
             else {
-                yield putFile(ssh, local, remote, verbose);
+                yield putFile(ssh, local, remote, verbose, reverse);
             }
             ssh.dispose();
             console.log('✅ scp Action finished.');
@@ -11395,11 +11396,12 @@ function scp(ssh, local, remote, dotfiles = false, concurrency, verbose = true, 
         }
     });
 }
-function putDirectory(ssh, local, remote, dotfiles = false, concurrency = 3, verbose = false, recursive = true) {
+function putDirectory(ssh, local, remote, dotfiles = false, concurrency = 3, verbose = false, recursive = true, reverse = false) {
     return __awaiter(this, void 0, void 0, function* () {
         const failed = [];
         const successful = [];
-        const status = yield ssh.putDirectory(local, remote, {
+        const toCall = reverse ? ssh.getDirectory : ssh.putDirectory;
+        const status = yield toCall(local, remote, {
             recursive: recursive,
             concurrency: concurrency,
             validate: (path) => !path_1.default.basename(path).startsWith('.') || dotfiles,
@@ -11443,12 +11445,17 @@ function cleanDirectory(ssh, remote, verbose = true) {
         }
     });
 }
-function putFile(ssh, local, remote, verbose = true) {
+function putFile(ssh, local, remote, verbose = true, reverse = false) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            yield ssh.putFile(local, remote);
-            if (verbose) {
-                console.log(`✔ Successfully copied file ${local} to remote ${remote}.`);
+            if (reverse) {
+                yield ssh.getFile(local, remote);
+            }
+            else {
+                yield ssh.putFile(local, remote);
+            }
+            if (verbose && !reverse) {
+                console.log(`✔ Successfully copied file ${local} ${reverse ? 'from' : 'to'} remote ${remote}.`);
             }
         }
         catch (error) {
@@ -11468,7 +11475,7 @@ function putMany(array, asyncFunction) {
         }
     });
 }
-process.on('uncaughtException', (err) => {
+process.on('uncaughtException', err => {
     if (err['code'] !== 'ECONNRESET')
         throw err;
 });
@@ -20474,7 +20481,7 @@ exports.keyboardFunction = keyboardFunction;
 /***/ 724:
 /***/ (function(module) {
 
-module.exports = {"_from":"ssh2-streams@~0.4.10","_id":"ssh2-streams@0.4.10","_inBundle":false,"_integrity":"sha512-8pnlMjvnIZJvmTzUIIA5nT4jr2ZWNNVHwyXfMGdRJbug9TpI3kd99ffglgfSWqujVv/0gxwMsDn9j9RVst8yhQ==","_location":"/ssh2-streams","_phantomChildren":{},"_requested":{"type":"range","registry":true,"raw":"ssh2-streams@~0.4.10","name":"ssh2-streams","escapedName":"ssh2-streams","rawSpec":"~0.4.10","saveSpec":null,"fetchSpec":"~0.4.10"},"_requiredBy":["/ssh2"],"_resolved":"https://registry.npmjs.org/ssh2-streams/-/ssh2-streams-0.4.10.tgz","_shasum":"48ef7e8a0e39d8f2921c30521d56dacb31d23a34","_spec":"ssh2-streams@~0.4.10","_where":"/Users/garygrossgarten/Dev/things/github-action-scp/node_modules/ssh2","author":{"name":"Brian White","email":"mscdex@mscdex.net"},"bugs":{"url":"https://github.com/mscdex/ssh2-streams/issues"},"bundleDependencies":false,"dependencies":{"asn1":"~0.2.0","bcrypt-pbkdf":"^1.0.2","streamsearch":"~0.1.2"},"deprecated":false,"description":"SSH2 and SFTP(v3) client/server protocol streams for node.js","engines":{"node":">=5.2.0"},"homepage":"https://github.com/mscdex/ssh2-streams#readme","keywords":["ssh","ssh2","sftp","secure","protocol","streams","client","server"],"licenses":[{"type":"MIT","url":"http://github.com/mscdex/ssh2-streams/raw/master/LICENSE"}],"main":"./index","name":"ssh2-streams","repository":{"type":"git","url":"git+ssh://git@github.com/mscdex/ssh2-streams.git"},"scripts":{"test":"node test/test.js"},"version":"0.4.10"};
+module.exports = {"name":"ssh2-streams","version":"0.4.10","author":"Brian White <mscdex@mscdex.net>","description":"SSH2 and SFTP(v3) client/server protocol streams for node.js","main":"./index","engines":{"node":">=5.2.0"},"dependencies":{"asn1":"~0.2.0","bcrypt-pbkdf":"^1.0.2","streamsearch":"~0.1.2"},"scripts":{"test":"node test/test.js"},"keywords":["ssh","ssh2","sftp","secure","protocol","streams","client","server"],"licenses":[{"type":"MIT","url":"http://github.com/mscdex/ssh2-streams/raw/master/LICENSE"}],"repository":{"type":"git","url":"http://github.com/mscdex/ssh2-streams.git"}};
 
 /***/ }),
 
